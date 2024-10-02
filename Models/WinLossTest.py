@@ -2,6 +2,8 @@ import pandas as pd
 import xgboost as xgb
 import numpy as np
 import sqlite3
+
+from bayes_opt import BayesianOptimization
 from sklearn.metrics import accuracy_score, log_loss, confusion_matrix
 from sklearn.model_selection import TimeSeriesSplit
 from os import path
@@ -30,8 +32,8 @@ def filter_columns_by_keywords(df, keywords):
     filtered_columns = [col for col in df.columns if any(keyword in col for keyword in keywords)]
     return filtered_columns
 
-# Use 'sma' keyword
-keywords = ['sma']
+# Test variety of keywords
+keywords = ['ema', 'wma']
 
 # Prepare features
 df['situation'] = df['situation'].astype('category')
@@ -60,57 +62,58 @@ tscv = TimeSeriesSplit(n_splits=5)
 
 # Comment out the Bayesian Optimization process
 
-# # Bayesian Optimization function
-# def xgb_evaluate(max_depth, learning_rate, n_estimators, gamma, min_child_weight, subsample, colsample_bytree):
-#     params = {
-#         'max_depth': int(max_depth),
-#         'learning_rate': learning_rate,
-#         'n_estimators': int(n_estimators),
-#         'gamma': gamma,
-#         'min_child_weight': min_child_weight,
-#         'subsample': subsample,
-#         'colsample_bytree': colsample_bytree,
-#         'eval_metric': 'logloss'
-#     }
+# Bayesian Optimization function
+def xgb_evaluate(max_depth, learning_rate, n_estimators, gamma, min_child_weight, subsample, colsample_bytree):
+     params = {
+         'max_depth': int(max_depth),
+         'learning_rate': learning_rate,
+         'n_estimators': int(n_estimators),
+         'gamma': gamma,
+         'min_child_weight': min_child_weight,
+         'subsample': subsample,
+         'colsample_bytree': colsample_bytree,
+         'eval_metric': 'logloss'
+     }
 
-#     tscv = TimeSeriesSplit(n_splits=5)
-#     accuracies = []
-#     log_losses = []
+     tscv = TimeSeriesSplit(n_splits=5)
+     accuracies = []
+     log_losses = []
 
-#     for train_index, test_index in tscv.split(X):
-#         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-#         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+     for train_index, test_index in tscv.split(X):
+         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
-#         xgb_classifier = xgb.XGBClassifier(**params)
-#         xgb_classifier.fit(X_train, y_train)
+         xgb_classifier = xgb.XGBClassifier(**params)
+         xgb_classifier.fit(X_train, y_train)
 
-#         y_pred_proba_class = xgb_classifier.predict_proba(X_test)[:, 1]
+         y_pred_proba_class = xgb_classifier.predict_proba(X_test)[:, 1]
 
-#         logloss_class = log_loss(y_test, y_pred_proba_class)
-#         log_losses.append(logloss_class)
+         logloss_class = log_loss(y_test, y_pred_proba_class)
+         log_losses.append(logloss_class)
 
-#     return -np.mean(log_losses)  # Negative because Bayesian Optimization maximizes
+     return -np.mean(log_losses)  # Negative because Bayesian Optimization maximizes
 
-# # Define parameter ranges
-# params = {
-#     'max_depth': (3, 10),
-#     'learning_rate': (0.01, 0.3),
-#     'n_estimators': (50, 300),
-#     'gamma': (0, 1),
-#     'min_child_weight': (1, 10),
-#     'subsample': (0.6, 1),
-#     'colsample_bytree': (0.6, 1)
-# }
+# Define parameter ranges
+params = {
+     'max_depth': (3, 10),
+     'learning_rate': (0.01, 0.3),
+     'n_estimators': (50, 300),
+     'gamma': (0, 1),
+     'min_child_weight': (1, 10),
+     'subsample': (0.6, 1),
+     'colsample_bytree': (0.6, 1)
+}
 
-# # Run Bayesian Optimization
-# optimizer = BayesianOptimization(f=xgb_evaluate, pbounds=params, random_state=0)
-# optimizer.maximize(init_points=10, n_iter=50)
+# Run Bayesian Optimization
+optimizer = BayesianOptimization(f=xgb_evaluate, pbounds=params, random_state=0)
+optimizer.maximize(init_points=10, n_iter=50)
 
-# # Get best parameters
-# best_params = optimizer.max['params']
-# best_params['max_depth'] = int(best_params['max_depth'])
-# best_params['n_estimators'] = int(best_params['n_estimators'])
+# Get best parameters
+best_params = optimizer.max['params']
+best_params['max_depth'] = int(best_params['max_depth'])
+best_params['n_estimators'] = int(best_params['n_estimators'])
 
+"""
 # Replace with your best parameters from the optimization
 best_params = {
     'colsample_bytree': 1.0,
@@ -122,6 +125,7 @@ best_params = {
     'subsample': 0.6,
     'eval_metric': 'logloss'
 }
+"""
 
 # Evaluate with best parameters
 xgb_classifier = xgb.XGBClassifier(**best_params)
@@ -148,11 +152,72 @@ print(feature_importances.head(50))
 
 
 """
-Best Parameters: {'colsample_bytree': 1.0, 'gamma': 1.0, 'learning_rate': 0.01, 'max_depth': 10, 
-    'min_child_weight': 10.0, 'n_estimators': 156, 'subsample': 0.6}
+SMA (Using SMA optimization)
 Holdout Season Accuracy: 0.5505714285714286
-Holdout Season Log Loss: 0.6858783967489863
-Confusion Matrix for Holdout Season:
 [[2328 1152]
  [1994 1526]]
+"""
+
+"""
+EMA (using SMA optimization)
+Holdout Season Accuracy: 0.5308571428571428
+Confusion Matrix for Holdout Season:
+[[2345 1135]
+ [2149 1371]]
+ """
+
+"""
+WMA (using SMA optimization)
+Holdout Season Accuracy: 0.5442857142857143
+Confusion Matrix for Holdout Season:
+[[2305 1175]
+ [2015 1505]]
+"""
+
+"""
+WMA & SMA (using SMA optimization)
+Holdout Season Accuracy: 0.5498571428571428
+Confusion Matrix for Holdout Season:
+[[2307 1173]
+ [1978 1542]]
+"""
+
+"""
+EMA & SMA (using SMA optimization)
+Holdout Season Accuracy: 0.5457142857142857
+Confusion Matrix for Holdout Season:
+[[2272 1208]
+ [1972 1548]]
+ """
+
+"""
+EMA & WMA (using SMA optimization)
+Holdout Season Accuracy: 0.5511428571428572
+Confusion Matrix for Holdout Season:
+[[2335 1145]
+ [1997 1523]]
+"""
+
+"""
+EMA & SMA & WMA (using SMA optimization)
+Holdout Season Accuracy: 0.5507142857142857
+Confusion Matrix for Holdout Season:
+[[2301 1179]
+ [1966 1554]]
+"""
+
+"""
+EMA & WMA (using EMA WMA optimization)
+Best Parameters: {'colsample_bytree': 0.7113313018561339, 
+'gamma': 0.9995643157035179, 
+'learning_rate': 0.029071490623706356, 
+'max_depth': 3, 
+'min_child_weight': 8.376098044866083, 
+'n_estimators': 235, 
+'subsample': 0.7698990732128393}
+Holdout Season Accuracy: 0.545
+Holdout Season Log Loss: 0.686295221695528
+Confusion Matrix for Holdout Season:
+[[2291 1189]
+ [1996 1524]]
 """
